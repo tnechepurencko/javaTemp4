@@ -606,6 +606,11 @@ public class VisitTypeCheck {
 
         public Type visit(org.syntax.stella.Absyn.Tuple p, ContextAndExpectedType arg) {
             /* Code for Tuple goes here */
+            if (!(arg.expectedType instanceof TypeTuple)) {
+                throw new TypeError("expected Tuple, got " + arg.expectedType.getClass());
+            } else if (p.listexpr_.size() != ((TypeTuple) arg.expectedType).listtype_.size()) {
+                throw new TypeError("size of the tuple does not correspond to the actual type");
+            }
             int i = 0;
             for (org.syntax.stella.Absyn.Expr x : p.listexpr_) {
                 Type t = ((TypeTuple) arg.expectedType).listtype_.get(i);
