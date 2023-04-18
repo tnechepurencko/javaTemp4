@@ -515,10 +515,43 @@ public class VisitTypeCheck {
 
         public Type visit(org.syntax.stella.Absyn.Match p, ContextAndExpectedType arg) {
             /* Code for Match goes here */
-            p.expr_.accept(new ExprVisitor(), arg);
-            for (org.syntax.stella.Absyn.MatchCase x : p.listmatchcase_) {
-                x.accept(new MatchCaseVisitor(), arg);
+            Type type = p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, null));
+            if (!(type instanceof TypeSum)) {
+                throw new TypeError("expected TypeSum, got " + type.getClass());
             }
+
+            AMatchCase amc1 = (AMatchCase) p.listmatchcase_.get(0);
+            AMatchCase amc2 = (AMatchCase) p.listmatchcase_.get(1);
+            PatternInl inl;
+            PatternInr inr;
+            if (amc1.pattern_ instanceof PatternInl && amc2.pattern_ instanceof PatternInr) {
+                inr = (PatternInr) amc2.pattern_;
+                inl = (PatternInl) amc1.pattern_;
+            } else if (amc1.pattern_ instanceof PatternInr && amc2.pattern_ instanceof PatternInl) {
+                inr = (PatternInr) amc1.pattern_;
+                inl = (PatternInl) amc2.pattern_;
+            } else {
+                throw new TypeError("expected to have PatternInl and PatternInr within TypeSum");
+            }
+
+            HashMap inlContext = new HashMap<>(arg.context);
+            if (inl.pattern_ instanceof PatternVar var) {
+                inlContext.put(var.stellaident_, ((TypeSum) type).type_1);
+            }
+
+            HashMap inrContext = new HashMap<>(arg.context);
+            if (inr.pattern_ instanceof PatternVar var) {
+                inrContext.put(var.stellaident_, ((TypeSum) type).type_2);
+            }
+
+            if (amc1.pattern_ instanceof PatternInl) {
+                amc1.accept(new MatchCaseVisitor(), new ContextAndExpectedType(inlContext, arg.expectedType));
+                amc2.accept(new MatchCaseVisitor(), new ContextAndExpectedType(inrContext, arg.expectedType));
+            } else {
+                amc1.accept(new MatchCaseVisitor(), new ContextAndExpectedType(inrContext, arg.expectedType));
+                amc2.accept(new MatchCaseVisitor(), new ContextAndExpectedType(inlContext, arg.expectedType));
+            }
+
             return null;
         }
 
@@ -655,13 +688,29 @@ public class VisitTypeCheck {
 
         public Type visit(org.syntax.stella.Absyn.Inl p, ContextAndExpectedType arg) {
             /* Code for Inl goes here */
-            p.expr_.accept(new ExprVisitor(), arg);
+            if (!(arg.expectedType instanceof TypeSum)) {
+                throw new TypeError("expected " + PrettyPrinter.print(arg.expectedType) + " but got TypeSum for expression " + PrettyPrinter.print(p));
+            }
+            try {
+                p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, ((TypeSum)arg.expectedType).type_1));
+            } catch (Exception e) {
+                p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, ((TypeSum)arg.expectedType).type_2));
+            }
+//            p.expr_.accept(new ExprVisitor(), arg);
             return null;
         }
 
         public Type visit(org.syntax.stella.Absyn.Inr p, ContextAndExpectedType arg) {
             /* Code for Inr goes here */
-            p.expr_.accept(new ExprVisitor(), arg);
+            if (!(arg.expectedType instanceof TypeSum)) {
+                throw new TypeError("expected " + PrettyPrinter.print(arg.expectedType) + " but got TypeSum for expression " + PrettyPrinter.print(p));
+            }
+            try {
+                p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, ((TypeSum)arg.expectedType).type_1));
+            } catch (Exception e) {
+                p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, ((TypeSum)arg.expectedType).type_2));
+            }
+//            p.expr_.accept(new ExprVisitor(), arg);
             return null;
         }
 

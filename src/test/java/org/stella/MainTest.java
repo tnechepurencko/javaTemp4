@@ -13,6 +13,8 @@ class MainTest {
 
     @ParameterizedTest(name = "{index} Typechecking well-typed program {0}")
     @ValueSource(strings = {
+            "tests/sum-types/well-typed/sum-types-1.stella",
+            "tests/sum-types/well-typed/sum-types-2.stella",
             "tests/tuples/well-typed/tuples-1.stella",
             "tests/unit/unit1.stella",
             "tests/pairs/well-typed/pairs-1.stella",
@@ -65,6 +67,9 @@ class MainTest {
 //            "tests/pairs/well-typed/pairs-1.stella", // TODO DEL
 //            "tests/core/well-typed/good-succ-1.stella", // TODO DEL
 //            "tests/unit/unit1.stella", // TODO DEL
+//            "tests/sum-types/well-typed/sum-types-1.stella", // TODO DEL
+//            "tests/sum-types/well-typed/sum-types-2.stella", // TODO DEL
+            "tests/sum-types/ill-typed/bad-sum-types-1.stella",
             "tests/tuples/ill-typed/bad-tuples-1.stella",
             "tests/unit/bad_unit1.stella",
             "tests/pairs/ill-typed/bad-pairs-1.stella",
