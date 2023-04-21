@@ -474,7 +474,23 @@ public class VisitTypeCheck {
             System.out.println("Visiting if");
             p.expr_1.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, new TypeBool()));
             Type thenType = p.expr_2.accept(new ExprVisitor(), arg);
-            p.expr_3.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, thenType));
+            Type elseType = p.expr_3.accept(new ExprVisitor(), arg);
+//            if (thenType == null && elseType == null) {
+//                return arg.expectedType;
+//            } else if (thenType == null) {
+//                return compareTypes(p, elseType, arg.expectedType);
+//            } else if (elseType == null) {
+//                return compareTypes(p, thenType, arg.expectedType);
+//            }
+            if (thenType instanceof PanicType && elseType instanceof PanicType) {
+                return arg.expectedType;
+            } else if (thenType instanceof PanicType) {
+                return compareTypes(p, elseType, arg.expectedType);
+            } else if (elseType instanceof PanicType) {
+                return compareTypes(p, thenType, arg.expectedType);
+            }
+            compareTypes(p, elseType, arg.expectedType);
+            compareTypes(p, elseType, thenType);
             return compareTypes(p, thenType, arg.expectedType);
         }
 
@@ -526,9 +542,9 @@ public class VisitTypeCheck {
 
         public Type visit(org.syntax.stella.Absyn.Equal p, ContextAndExpectedType arg) {
             /* Code for Equal goes here */
-            p.expr_1.accept(new ExprVisitor(), arg);
-            p.expr_2.accept(new ExprVisitor(), arg);
-            return null;
+            Type t1 = p.expr_1.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, null));
+            Type t2 = p.expr_2.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, null));
+            return compareTypes(p.expr_1, t1, t2);
         }
 
         public Type visit(org.syntax.stella.Absyn.NotEqual p, ContextAndExpectedType arg) {
@@ -564,7 +580,12 @@ public class VisitTypeCheck {
                     throw new TypeError("unexpected lambda abstraction");
                 }
             }
-            bodyType = p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(newContext, bodyType));
+            Type expectedType = bodyType;
+            bodyType = p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(newContext, expectedType));
+            if (bodyType instanceof PanicType) {
+//            if (bodyType == null) {
+                bodyType = expectedType;
+            }
 
             ListType argType = new ListType();
             argType.add(paramDecl.type_);
@@ -658,9 +679,11 @@ public class VisitTypeCheck {
 
         public Type visit(org.syntax.stella.Absyn.Divide p, ContextAndExpectedType arg) {
             /* Code for Divide goes here */
-            p.expr_1.accept(new ExprVisitor(), arg);
-            p.expr_2.accept(new ExprVisitor(), arg);
-            return null;
+            Type t1 = p.expr_1.accept(new ExprVisitor(), arg);
+            Type t2 = p.expr_2.accept(new ExprVisitor(), arg);
+            compareTypes(p, t1, new TypeNat());
+            compareTypes(p, new TypeNat(), arg.expectedType);
+            return compareTypes(p, t2, new TypeNat());
         }
 
         public Type visit(org.syntax.stella.Absyn.LogicAnd p, ContextAndExpectedType arg) {
@@ -680,12 +703,23 @@ public class VisitTypeCheck {
 
         public Type visit(org.syntax.stella.Absyn.Application p, ContextAndExpectedType arg) {
             /* Code for Application goes here */
+            if (p.expr_ instanceof Panic) {
+                throw new TypeError("application to panic");
+            }
             Type funType = p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, null));
             if (funType instanceof TypeFun) {
                 Type argType = ((TypeFun) funType).listtype_.get(0);
                 Type retType = ((TypeFun) funType).type_;
-                p.listexpr_.get(0).accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, argType));
+                Type t = p.listexpr_.get(0).accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, argType));
+                if (t instanceof PanicType) {
+                    throw new TypeError("trying to apply panic as an argument");
+                }
+//                if (t == null) {
+//                    throw new TypeError("trying to apply panic as an argument");
+//                }
                 return compareTypes(p, retType, arg.expectedType);
+            } else if (funType == null) {
+                return arg.expectedType; // panic!
             } else {
                 throw new TypeError("trying to apply an expression of a non-function type");
             }
@@ -794,7 +828,8 @@ public class VisitTypeCheck {
         }
 
         public Type visit(Panic p, ContextAndExpectedType arg) {
-            return null;
+            return new PanicType();
+//            return null;
         }
 
         public Type visit(Throw p, ContextAndExpectedType arg) {
