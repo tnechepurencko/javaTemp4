@@ -3,9 +3,12 @@
 package org.stella.typecheck;
 
 import org.syntax.stella.Absyn.*;
+import org.syntax.stella.Absyn.Record;
 import org.syntax.stella.PrettyPrinter;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedList;
 
 /*** Visitor Design Pattern for TypeCheck. ***/
 
@@ -40,6 +43,17 @@ public class VisitTypeCheck {
             return expectedType;
         }
         throw new TypeError("expected " + PrettyPrinter.print(expectedType) + " but got " + PrettyPrinter.print(actualType) + " for expression " + PrettyPrinter.print(e));
+    }
+
+    public Type getVarType(org.syntax.stella.Absyn.Var p, ContextAndExpectedType arg) {
+        /* Code for Var goes here */
+        //p.stellaident_;
+        Type varType = arg.context.get(p.stellaident_);
+        if (varType == null) {
+            throw new TypeError("undefined variable");
+        } else {
+            return varType;
+        }
     }
 
     public class ProgramVisitor implements org.syntax.stella.Absyn.Program.Visitor<org.syntax.stella.Absyn.Type, ContextAndExpectedType> {
@@ -101,6 +115,14 @@ public class VisitTypeCheck {
                     throw new TypeError("missing return type in declaration");
                 }
 
+                public Type visit(DeclExceptionType  p, Object arg) {
+                    return null;
+                }
+
+                public Type visit(DeclExceptionVariant  p, Object arg) {
+                    return null;
+                }
+
                 @Override
                 public Type visit(SomeReturnType p, Object arg) {
                     return p.type_;
@@ -119,6 +141,16 @@ public class VisitTypeCheck {
             /* Code for DeclTypeAlias goes here */
             //p.stellaident_;
             p.type_.accept(new TypeVisitor(), arg);
+            return null;
+        }
+
+        @Override
+        public Type visit(DeclExceptionType p, ContextAndExpectedType arg) {
+            return null;
+        }
+
+        @Override
+        public Type visit(DeclExceptionVariant p, ContextAndExpectedType arg) {
             return null;
         }
     }
@@ -196,6 +228,18 @@ public class VisitTypeCheck {
             /* Code for TypeSum goes here */
             p.type_1.accept(new TypeVisitor(), arg);
             p.type_2.accept(new TypeVisitor(), arg);
+            return null;
+        }
+
+        public Type visit(TypeTop p, ContextAndExpectedType arg) {
+            return null;
+        }
+
+        public Type visit(TypeBottom p, ContextAndExpectedType arg) {
+            return null;
+        }
+
+        public Type visit(TypeRef p, ContextAndExpectedType arg) {
             return null;
         }
 
@@ -395,7 +439,20 @@ public class VisitTypeCheck {
         public Type visit(org.syntax.stella.Absyn.ABinding p, ContextAndExpectedType arg) {
             /* Code for ABinding goes here */
             //p.stellaident_;
-            p.expr_.accept(new ExprVisitor(), arg);
+            String name = p.stellaident_;
+            // find that this name exists
+            Type expectedType = null;
+            for (RecordFieldType rft : ((TypeRecord)arg.expectedType).listrecordfieldtype_) {
+                if (((ARecordFieldType) rft).stellaident_.equals(name)) {
+                    expectedType = ((ARecordFieldType) rft).type_;
+                    break;
+                }
+            }
+            if (expectedType == null) {
+                throw new TypeError("variable '" + name + "' does not match the pattern of the record");
+            }
+
+            p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, expectedType));
             return null;
         }
     }
@@ -405,6 +462,10 @@ public class VisitTypeCheck {
             /* Code for Sequence goes here */
             p.expr_1.accept(new ExprVisitor(), arg);
             p.expr_2.accept(new ExprVisitor(), arg);
+            return null;
+        }
+
+        public Type visit(Assign p, ContextAndExpectedType arg) {
             return null;
         }
 
@@ -481,6 +542,10 @@ public class VisitTypeCheck {
             /* Code for TypeAsc goes here */
             p.expr_.accept(new ExprVisitor(), arg);
             p.type_.accept(new TypeVisitor(), arg);
+            return null;
+        }
+
+        public Type visit(TypeCast p, ContextAndExpectedType arg) {
             return null;
         }
 
@@ -605,6 +670,14 @@ public class VisitTypeCheck {
             return null;
         }
 
+        public Type visit(Ref p, ContextAndExpectedType arg) {
+            return null;
+        }
+
+        public Type visit(Deref p, ContextAndExpectedType arg) {
+            return null;
+        }
+
         public Type visit(org.syntax.stella.Absyn.Application p, ContextAndExpectedType arg) {
             /* Code for Application goes here */
             Type funType = p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, null));
@@ -620,9 +693,28 @@ public class VisitTypeCheck {
 
         public Type visit(org.syntax.stella.Absyn.DotRecord p, ContextAndExpectedType arg) {
             /* Code for DotRecord goes here */
-            p.expr_.accept(new ExprVisitor(), arg);
+            String dotName = p.stellaident_;
+            Type actualType = null;
+            if (p.expr_ instanceof Var v) {
+                Type recordType = getVarType(v, arg);
+                if (!(recordType instanceof TypeRecord)) {
+                    throw new TypeError("variable '" + v.stellaident_ + "' should be record");
+                }
+                for (RecordFieldType rft : ((TypeRecord) recordType).listrecordfieldtype_) {
+                    if (((ARecordFieldType) rft).stellaident_.equals(dotName)) {
+                        actualType = ((ARecordFieldType) rft).type_;
+                        break;
+                    }
+                }
+
+                if (actualType == null) {
+                    throw new TypeError("variable '" + dotName + "' does not match the pattern of the record");
+                }
+            }
+
+            p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, null));
             //p.stellaident_;
-            return null;
+            return compareTypes(p.expr_, actualType, arg.expectedType);
         }
 
         public Type visit(org.syntax.stella.Absyn.DotTuple p, ContextAndExpectedType arg) {
@@ -655,6 +747,21 @@ public class VisitTypeCheck {
 
         public Type visit(org.syntax.stella.Absyn.Record p, ContextAndExpectedType arg) {
             /* Code for Record goes here */
+            LinkedList<String> names = new LinkedList<>();
+            LinkedList<String> expectedNames = new LinkedList<>();
+            var expectedList = ((TypeRecord) arg.expectedType).listrecordfieldtype_;
+            var currentList = p.listbinding_;
+            if (expectedList.size() != currentList.size()) {
+                throw new TypeError("size of the record does not correspond to the actual type");
+            }
+            for (int i = 0; i < expectedList.size(); i++) {
+                names.add(((ABinding) currentList.get(i)).stellaident_);
+                expectedNames.add(((ARecordFieldType) expectedList.get(i)).stellaident_);
+            }
+            if (!Arrays.equals(names.stream().sorted().toArray(), expectedNames.stream().sorted().toArray())) {
+                throw new TypeError("variables of the record does not correspond to the expected ones");
+            }
+
             for (org.syntax.stella.Absyn.Binding x : p.listbinding_) {
                 x.accept(new BindingVisitor(), arg);
             }
@@ -683,6 +790,22 @@ public class VisitTypeCheck {
         public Type visit(org.syntax.stella.Absyn.Tail p, ContextAndExpectedType arg) {
             /* Code for Tail goes here */
             p.expr_.accept(new ExprVisitor(), arg);
+            return null;
+        }
+
+        public Type visit(Panic p, ContextAndExpectedType arg) {
+            return null;
+        }
+
+        public Type visit(Throw p, ContextAndExpectedType arg) {
+            return null;
+        }
+
+        public Type visit(TryCatch p, ContextAndExpectedType arg) {
+            return null;
+        }
+
+        public Type visit(TryWith p, ContextAndExpectedType arg) {
             return null;
         }
 
@@ -791,6 +914,10 @@ public class VisitTypeCheck {
             /* Code for ConstInt goes here */
             //p.integer_;
             return compareTypes(p, new TypeNat(), arg.expectedType);
+        }
+
+        public Type visit(ConstMemory p, ContextAndExpectedType arg) {
+            return null;
         }
 
         public Type visit(org.syntax.stella.Absyn.Var p, ContextAndExpectedType arg) {
