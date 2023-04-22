@@ -13,7 +13,11 @@ class MainTest {
 
     @ParameterizedTest(name = "{index} Typechecking well-typed program {0}")
     @ValueSource(strings = {
-            "tests/exceptions/well-typed/panic-1.stella", // TODO LET if I'll have time
+            "tests/references/well-typed/refs-1.stella",
+            "tests/references/well-typed/refs-2.stella",
+//            "tests/references/well-typed/refs-3.stella", // TODO LET if I'll have time
+            "tests/references/well-typed/refs-4.stella",
+//            "tests/exceptions/well-typed/panic-1.stella", // TODO LET if I'll have time
             "tests/exceptions/well-typed/panic-2.stella",
             "tests/exceptions/well-typed/panic-3.stella",
             "tests/exceptions/well-typed/panic-4.stella",
@@ -70,11 +74,16 @@ class MainTest {
 
     @ParameterizedTest(name = "{index} Typechecking ill-typed program {0}")
     @ValueSource(strings = {
+//            "tests/references/well-typed/refs-4.stella", // TODO DEL
+//            "tests/references/well-typed/refs-1.stella", // TODO DEL
 //            "tests/exceptions/well-typed/panic-4.stella", // TODO DEL
 //            "tests/exceptions/well-typed/panic-1.stella", // TODO DEL
 //            "tests/exceptions/well-typed/panic-2.stella", // TODO DEL
 //            "tests/records/well-typed/records-1.stella", // TODO DEL
 
+            "tests/references/ill-typed/bad-refs-1.stella",
+            "tests/references/ill-typed/bad-refs-2.stella",
+            "tests/references/ill-typed/bad-refs-2.stella",
             "tests/exceptions/ill-typed/bad-panic-2.stella",
             "tests/exceptions/ill-typed/bad-panic-1.stella",
             "tests/records/ill-typed/bad-records-1.stella",

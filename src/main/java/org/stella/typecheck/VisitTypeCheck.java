@@ -460,13 +460,22 @@ public class VisitTypeCheck {
     public class ExprVisitor implements org.syntax.stella.Absyn.Expr.Visitor<org.syntax.stella.Absyn.Type, ContextAndExpectedType> {
         public Type visit(org.syntax.stella.Absyn.Sequence p, ContextAndExpectedType arg) {
             /* Code for Sequence goes here */
-            p.expr_1.accept(new ExprVisitor(), arg);
+            p.expr_1.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, new TypeUnit()));
             p.expr_2.accept(new ExprVisitor(), arg);
             return null;
         }
 
         public Type visit(Assign p, ContextAndExpectedType arg) {
-            return null;
+            if (arg.expectedType instanceof TypeUnit) {
+                Type t1 = p.expr_1.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, null));
+                if (!(t1 instanceof TypeRef)) {
+                    throw new TypeError("expected TypeRef, got " + t1.getClass());
+                }
+                Type t = ((TypeRef) t1).type_;
+                Type t2 = p.expr_2.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, null));
+                return compareTypes(p.expr_2, t2, t);
+            }
+            throw new TypeError("expected " + arg.expectedType + ", got Assign");
         }
 
         public Type visit(org.syntax.stella.Absyn.If p, ContextAndExpectedType arg) {
@@ -694,10 +703,15 @@ public class VisitTypeCheck {
         }
 
         public Type visit(Ref p, ContextAndExpectedType arg) {
-            return null;
+            if (arg.expectedType instanceof TypeRef tr) {
+                p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, tr.type_));
+                return null;
+            }
+            throw new TypeError("expected " + arg.expectedType + ", got TypeRef");
         }
 
         public Type visit(Deref p, ContextAndExpectedType arg) {
+            p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, new TypeRef(arg.expectedType)));
             return null;
         }
 
