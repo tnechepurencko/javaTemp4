@@ -4,10 +4,6 @@ extend with
   #records,
   #structural-subtyping;
 
-fn f(r : {x : Nat}) -> Nat {
-  return r.x
-}
-
 fn g(k : fn({y : Nat, x : Nat}) -> Nat) -> Nat {
   return k({x = 0, y = 0})
 }

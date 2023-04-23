@@ -35,13 +35,39 @@ public class VisitTypeCheck {
         }
     }
 
+    public void recordTypeLegal(TypeRecord expected, TypeRecord actual) {
+        LinkedList<String> names = new LinkedList<>();
+        var expectedList = expected.listrecordfieldtype_;
+        var currentList = actual.listrecordfieldtype_;
+        if (expectedList.size() > currentList.size()) {
+            throw new TypeError("size of the record does not correspond to the actual type");
+        }
+
+        for (RecordFieldType rft : currentList) {
+            names.add(((ARecordFieldType) rft).stellaident_);
+        }
+
+        for (RecordFieldType rft : expectedList) {
+            if (!names.contains(((ARecordFieldType) rft).stellaident_)) {
+                throw new TypeError("a record does not contain the variable " + ((ARecordFieldType) rft).stellaident_);
+            }
+        }
+    }
+
     public Type compareTypes(Expr e, Type actualType, Type expectedType) {
         if (expectedType == null) {
             return actualType;
-        }
-        if (actualType.equals(expectedType)) {
+        } else if (actualType.equals(expectedType)) {
             return expectedType;
+        } else if (expectedType instanceof TypeFun et && actualType instanceof TypeFun at) {
+            compareTypes(e, et.type_, at.type_);
+            compareTypes(e, et.listtype_.get(0), at.listtype_.get(0));
+            return expectedType;
+        } else if (expectedType instanceof TypeRecord et && actualType instanceof TypeRecord at) {
+            recordTypeLegal(et, at);
+            return actualType; // questionable
         }
+
         throw new TypeError("expected " + PrettyPrinter.print(expectedType) + " but got " + PrettyPrinter.print(actualType) + " for expression " + PrettyPrinter.print(e));
     }
 
@@ -441,18 +467,23 @@ public class VisitTypeCheck {
             //p.stellaident_;
             String name = p.stellaident_;
             // find that this name exists
-            Type expectedType = null;
-            for (RecordFieldType rft : ((TypeRecord)arg.expectedType).listrecordfieldtype_) {
-                if (((ARecordFieldType) rft).stellaident_.equals(name)) {
-                    expectedType = ((ARecordFieldType) rft).type_;
-                    break;
-                }
-            }
-            if (expectedType == null) {
-                throw new TypeError("variable '" + name + "' does not match the pattern of the record");
+            var expectedList = ((TypeRecord) arg.expectedType).listrecordfieldtype_;
+            LinkedList<String> expectedNames = new LinkedList<>();
+            for (RecordFieldType rft : expectedList) {
+                expectedNames.add(((ARecordFieldType) rft).stellaident_);
             }
 
-            p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, expectedType));
+            if (expectedNames.contains(name)) {
+                Type expectedType = null;
+                for (RecordFieldType rft : expectedList) {
+                    if (((ARecordFieldType) rft).stellaident_.equals(name)) {
+                        expectedType = ((ARecordFieldType) rft).type_;
+                        break;
+                    }
+                }
+                p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, expectedType));
+            }
+
             return null;
         }
     }
@@ -484,13 +515,6 @@ public class VisitTypeCheck {
             p.expr_1.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, new TypeBool()));
             Type thenType = p.expr_2.accept(new ExprVisitor(), arg);
             Type elseType = p.expr_3.accept(new ExprVisitor(), arg);
-//            if (thenType == null && elseType == null) {
-//                return arg.expectedType;
-//            } else if (thenType == null) {
-//                return compareTypes(p, elseType, arg.expectedType);
-//            } else if (elseType == null) {
-//                return compareTypes(p, thenType, arg.expectedType);
-//            }
             if (thenType instanceof PanicType && elseType instanceof PanicType) {
                 return arg.expectedType;
             } else if (thenType instanceof PanicType) {
@@ -523,30 +547,30 @@ public class VisitTypeCheck {
 
         public Type visit(org.syntax.stella.Absyn.LessThan p, ContextAndExpectedType arg) {
             /* Code for LessThan goes here */
-            p.expr_1.accept(new ExprVisitor(), arg);
-            p.expr_2.accept(new ExprVisitor(), arg);
-            return null;
+            Type t1 = p.expr_1.accept(new ExprVisitor(), arg);
+            Type t2 = p.expr_2.accept(new ExprVisitor(), arg);
+            return compareTypes(p.expr_1, t1, t2);
         }
 
         public Type visit(org.syntax.stella.Absyn.LessThanOrEqual p, ContextAndExpectedType arg) {
             /* Code for LessThanOrEqual goes here */
-            p.expr_1.accept(new ExprVisitor(), arg);
-            p.expr_2.accept(new ExprVisitor(), arg);
-            return null;
+            Type t1 = p.expr_1.accept(new ExprVisitor(), arg);
+            Type t2 = p.expr_2.accept(new ExprVisitor(), arg);
+            return compareTypes(p.expr_1, t1, t2);
         }
 
         public Type visit(org.syntax.stella.Absyn.GreaterThan p, ContextAndExpectedType arg) {
             /* Code for GreaterThan goes here */
-            p.expr_1.accept(new ExprVisitor(), arg);
-            p.expr_2.accept(new ExprVisitor(), arg);
-            return null;
+            Type t1 = p.expr_1.accept(new ExprVisitor(), arg);
+            Type t2 = p.expr_2.accept(new ExprVisitor(), arg);
+            return compareTypes(p.expr_1, t1, t2);
         }
 
         public Type visit(org.syntax.stella.Absyn.GreaterThanOrEqual p, ContextAndExpectedType arg) {
             /* Code for GreaterThanOrEqual goes here */
-            p.expr_1.accept(new ExprVisitor(), arg);
-            p.expr_2.accept(new ExprVisitor(), arg);
-            return null;
+            Type t1 = p.expr_1.accept(new ExprVisitor(), arg);
+            Type t2 = p.expr_2.accept(new ExprVisitor(), arg);
+            return compareTypes(p.expr_1, t1, t2);
         }
 
         public Type visit(org.syntax.stella.Absyn.Equal p, ContextAndExpectedType arg) {
@@ -796,18 +820,20 @@ public class VisitTypeCheck {
         public Type visit(org.syntax.stella.Absyn.Record p, ContextAndExpectedType arg) {
             /* Code for Record goes here */
             LinkedList<String> names = new LinkedList<>();
-            LinkedList<String> expectedNames = new LinkedList<>();
             var expectedList = ((TypeRecord) arg.expectedType).listrecordfieldtype_;
             var currentList = p.listbinding_;
-            if (expectedList.size() != currentList.size()) {
+            if (expectedList.size() > currentList.size()) {
                 throw new TypeError("size of the record does not correspond to the actual type");
             }
-            for (int i = 0; i < expectedList.size(); i++) {
+
+            for (int i = 0; i < currentList.size(); i++) {
                 names.add(((ABinding) currentList.get(i)).stellaident_);
-                expectedNames.add(((ARecordFieldType) expectedList.get(i)).stellaident_);
             }
-            if (!Arrays.equals(names.stream().sorted().toArray(), expectedNames.stream().sorted().toArray())) {
-                throw new TypeError("variables of the record does not correspond to the expected ones");
+
+            for (RecordFieldType rft : expectedList) {
+                if (!names.contains(((ARecordFieldType) rft).stellaident_)) {
+                    throw new TypeError("a record does not contain the variable " + ((ARecordFieldType) rft).stellaident_);
+                }
             }
 
             for (org.syntax.stella.Absyn.Binding x : p.listbinding_) {

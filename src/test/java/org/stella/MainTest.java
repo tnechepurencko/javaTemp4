@@ -13,6 +13,14 @@ class MainTest {
 
     @ParameterizedTest(name = "{index} Typechecking well-typed program {0}")
     @ValueSource(strings = {
+            "tests/subtyping/well-typed/subtyping-1.stella",
+            "tests/subtyping/well-typed/subtyping-2.stella",
+            "tests/subtyping/well-typed/subtyping-3.stella",
+            "tests/subtyping/well-typed/subtyping-4.stella",
+//            "tests/subtyping/well-typed/subtyping-5.stella", // TODO CAST if I'll have time
+            "tests/subtyping/well-typed/subtyping-6.stella",
+//            "tests/subtyping/well-typed/subtyping-7.stella", // TODO BOT if I'll have time
+//            "tests/subtyping/well-typed/subtyping-8.stella", // TODO TOP if I'll have time
             "tests/references/well-typed/refs-1.stella",
             "tests/references/well-typed/refs-2.stella",
 //            "tests/references/well-typed/refs-3.stella", // TODO LET if I'll have time
@@ -74,6 +82,8 @@ class MainTest {
 
     @ParameterizedTest(name = "{index} Typechecking ill-typed program {0}")
     @ValueSource(strings = {
+//            "tests/core/ill-typed/bad-if-4.stella", // TODO DEL
+//            "tests/subtyping/well-typed/subtyping-6.stella", // TODO DEL
 //            "tests/references/well-typed/refs-4.stella", // TODO DEL
 //            "tests/references/well-typed/refs-1.stella", // TODO DEL
 //            "tests/exceptions/well-typed/panic-4.stella", // TODO DEL
@@ -81,9 +91,14 @@ class MainTest {
 //            "tests/exceptions/well-typed/panic-2.stella", // TODO DEL
 //            "tests/records/well-typed/records-1.stella", // TODO DEL
 
+            "tests/subtyping/ill-typed/bad-subtyping-1.stella",
+            "tests/subtyping/ill-typed/bad-subtyping-2.stella",
+//            "tests/subtyping/ill-typed/bad-subtyping-3.stella", // WRONG TEST
+            "tests/subtyping/ill-typed/bad-subtyping-4.stella",
+//            "tests/subtyping/ill-typed/bad-subtyping-5.stella", // TODO CAST if I'll have time
             "tests/references/ill-typed/bad-refs-1.stella",
             "tests/references/ill-typed/bad-refs-2.stella",
-            "tests/references/ill-typed/bad-refs-2.stella",
+//            "tests/references/ill-typed/bad-refs-3.stella", // TODO LET if I'll have time
             "tests/exceptions/ill-typed/bad-panic-2.stella",
             "tests/exceptions/ill-typed/bad-panic-1.stella",
             "tests/records/ill-typed/bad-records-1.stella",
