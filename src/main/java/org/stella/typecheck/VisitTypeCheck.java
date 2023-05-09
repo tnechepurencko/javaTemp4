@@ -3,12 +3,11 @@
 package org.stella.typecheck;
 
 import org.syntax.stella.Absyn.*;
+import org.syntax.stella.Absyn.List;
 import org.syntax.stella.Absyn.Record;
 import org.syntax.stella.PrettyPrinter;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.LinkedList;
+import java.util.*;
 
 /*** Visitor Design Pattern for TypeCheck. ***/
 
@@ -163,6 +162,68 @@ public class VisitTypeCheck {
             return null;
         }
 
+        @Override
+        public Type visit(DeclFunGeneric p, ContextAndExpectedType arg) {
+            ListStellaIdent genTypes = p.liststellaident_;
+
+            for (org.syntax.stella.Absyn.Annotation x : p.listannotation_) {
+                x.accept(new AnnotationVisitor(), arg);
+            }
+
+            for (org.syntax.stella.Absyn.ParamDecl x : p.listparamdecl_) {
+                if (((AParamDecl) x).type_ instanceof TypeVar tv && !(genTypes.contains(tv.stellaident_))) {
+                    throw new TypeError("unknown TypeVar: " + genTypes.contains(tv.stellaident_));
+                }
+                x.accept(new ParamDeclVisitor(), arg);
+            }
+
+            if (p.returntype_ instanceof SomeReturnType srt && srt.type_ instanceof TypeVar tv) {
+                if (!(genTypes.contains(tv.stellaident_))) {
+                    throw new TypeError("unknown TypeVar: " + genTypes.contains(tv.stellaident_));
+                }
+            }
+            p.returntype_.accept(new ReturnTypeVisitor(), arg);
+            p.throwtype_.accept(new ThrowTypeVisitor(), arg);
+            for (org.syntax.stella.Absyn.Decl x : p.listdecl_) {
+                x.accept(new DeclVisitor(), arg);
+            }
+
+            HashMap newContext = new HashMap<>(arg.context);
+            AParamDecl paramDecl = (AParamDecl) p.listparamdecl_.get(0);
+            newContext.put(paramDecl.stellaident_, paramDecl.type_);
+
+            Type returnType = p.returntype_.accept(new ReturnType.Visitor<Type, Object>() {
+                @Override
+                public Type visit(NoReturnType p, Object arg) {
+                    throw new TypeError("missing return type in declaration");
+                }
+
+                public Type visit(DeclExceptionType  p, Object arg) {
+                    return null;
+                }
+
+                public Type visit(DeclExceptionVariant  p, Object arg) {
+                    return null;
+                }
+
+                @Override
+                public Type visit(SomeReturnType p, Object arg) {
+                    return p.type_;
+                }
+            }, null);
+
+            p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(newContext, returnType));
+            if (returnType instanceof TypeForAll tfa) {
+                TypeFun typeFun = (TypeFun) tfa.type_;
+                returnType = new TypeGenericFun(typeFun.listtype_, typeFun.type_, tfa.liststellaident_);
+            }
+
+            ListType argListType = new ListType();
+            argListType.add(paramDecl.type_);
+            arg.context.put(p.stellaident_, new TypeGenericFun(argListType, returnType, genTypes));
+            return null;
+        }
+
         public org.syntax.stella.Absyn.Type visit(org.syntax.stella.Absyn.DeclTypeAlias p, ContextAndExpectedType arg) {
             /* Code for DeclTypeAlias goes here */
             //p.stellaident_;
@@ -240,6 +301,11 @@ public class VisitTypeCheck {
                 x.accept(new TypeVisitor(), arg);
             }
             p.type_.accept(new TypeVisitor(), arg);
+            return null;
+        }
+
+        @Override
+        public Type visit(TypeForAll p, ContextAndExpectedType arg) {
             return null;
         }
 
@@ -545,6 +611,12 @@ public class VisitTypeCheck {
             return null;
         }
 
+        @Override
+        public Type visit(TypeAbstraction p, ContextAndExpectedType arg) {
+            p.expr_.accept(new ExprVisitor(), arg);
+            return null;
+        }
+
         public Type visit(org.syntax.stella.Absyn.LessThan p, ContextAndExpectedType arg) {
             /* Code for LessThan goes here */
             Type t1 = p.expr_1.accept(new ExprVisitor(), arg);
@@ -606,9 +678,12 @@ public class VisitTypeCheck {
 
             Type bodyType = null;
             if (arg.expectedType != null) {
-                if (arg.expectedType instanceof TypeFun) {
-                    compareTypes(new Var(paramDecl.stellaident_), paramDecl.type_, ((TypeFun) arg.expectedType).listtype_.get(0));
+                if (arg.expectedType instanceof TypeFun tf) {
+                    compareTypes(new Var(paramDecl.stellaident_), paramDecl.type_, tf.listtype_.get(0));
                     bodyType = ((TypeFun) arg.expectedType).type_;
+                } else if (arg.expectedType instanceof TypeForAll tfa) {
+                    compareTypes(new Var(paramDecl.stellaident_), paramDecl.type_, ((TypeFun) tfa.type_).listtype_.get(0));
+                    bodyType = ((TypeFun) tfa.type_).type_;
                 } else {
                     throw new TypeError("unexpected lambda abstraction");
                 }
@@ -616,13 +691,16 @@ public class VisitTypeCheck {
             Type expectedType = bodyType;
             bodyType = p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(newContext, expectedType));
             if (bodyType instanceof PanicType) {
-//            if (bodyType == null) {
                 bodyType = expectedType;
             }
 
             ListType argType = new ListType();
             argType.add(paramDecl.type_);
-            return compareTypes(p, new TypeFun(argType, bodyType), arg.expectedType);
+            if (arg.expectedType instanceof TypeForAll tfa) {
+                return compareTypes(p, new TypeFun(argType, bodyType), tfa.type_);
+            } else {
+                return compareTypes(p, new TypeFun(argType, bodyType), arg.expectedType);
+            }
         }
 
         public Type visit(org.syntax.stella.Absyn.Variant p, ContextAndExpectedType arg) {
@@ -745,22 +823,80 @@ public class VisitTypeCheck {
                 throw new TypeError("application to panic");
             }
             Type funType = p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, null));
-            if (funType instanceof TypeFun) {
-                Type argType = ((TypeFun) funType).listtype_.get(0);
-                Type retType = ((TypeFun) funType).type_;
+            if (funType instanceof TypeGenericFun tgf) {
+                Expr typeApplication = p.expr_;
+                try {
+                    while (!(typeApplication instanceof TypeApplication)) {
+                        typeApplication = ((Application) typeApplication).expr_;
+                    }
+                } catch (Exception e) {
+                    throw new TypeError("no type for generic function was indicated");
+                }
+
+                Map<String, Type> types = new HashMap<>();
+                for (int i = 0; i < tgf.generics_.size(); i++) {
+                    types.put(tgf.generics_.get(i), ((TypeApplication) typeApplication).listtype_.get(i));
+                }
+
+                Type argType;
+                if (((TypeFun) funType).listtype_.get(0) instanceof TypeVar tv) {
+                    argType = types.get(tv.stellaident_);
+                } else {
+                    argType = ((TypeFun) funType).listtype_.get(0);
+                }
+                Type retType;
+                if (((TypeFun) funType).type_ instanceof TypeVar tv) {
+                    retType = types.get(tv.stellaident_);
+                } else {
+                    retType = ((TypeFun) funType).type_;
+                    if (retType instanceof TypeFun tf && !(retType instanceof TypeGenericFun)) {
+                        retType = new TypeGenericFun(tf.listtype_, tf.type_, tgf.generics_);
+                    } else if (retType instanceof TypeForAll tfa) {
+                        TypeFun tf = (TypeFun) tfa.type_;
+                        retType = new TypeGenericFun(tf.listtype_, tf.type_, tgf.generics_);
+                    }
+
+                    if (retType instanceof TypeGenericFun retTypeTGF && retTypeTGF.type_ instanceof TypeVar typeVar) {
+                        retType = new TypeGenericFun(retTypeTGF.listtype_, types.get(typeVar.stellaident_), retTypeTGF.generics_);
+                    }
+
+                    Type t = p.listexpr_.get(0).accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, argType));
+                    if (t instanceof PanicType) {
+                        throw new TypeError("trying to apply panic as an argument");
+                    }
+
+                    if (tgf.type_ instanceof TypeFun tf && !(retType instanceof TypeGenericFun)) {
+                        return new TypeGenericFun(tf.listtype_, tf.type_, tgf.generics_);
+                    }
+                    return compareTypes(p, retType, arg.expectedType);
+                }
                 Type t = p.listexpr_.get(0).accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, argType));
                 if (t instanceof PanicType) {
                     throw new TypeError("trying to apply panic as an argument");
                 }
-//                if (t == null) {
-//                    throw new TypeError("trying to apply panic as an argument");
-//                }
+                return compareTypes(p, retType, arg.expectedType);
+            } else if (funType instanceof TypeFun typeFun) {
+                Type argType = typeFun.listtype_.get(0);
+                Type retType = typeFun.type_;
+                Type t = p.listexpr_.get(0).accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, argType));
+                if (t instanceof PanicType) {
+                    throw new TypeError("trying to apply panic as an argument");
+                }
                 return compareTypes(p, retType, arg.expectedType);
             } else if (funType == null) {
                 return arg.expectedType; // panic!
             } else {
                 throw new TypeError("trying to apply an expression of a non-function type");
             }
+        }
+
+        @Override
+        public Type visit(TypeApplication p, ContextAndExpectedType arg) {
+            Type funType = p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, null));
+            if (funType instanceof TypeForAll tfa) {
+                funType = new TypeGenericFun(((TypeFun) tfa.type_).listtype_, ((TypeFun) tfa.type_).type_, tfa.liststellaident_);
+            }
+            return funType;
         }
 
         public Type visit(org.syntax.stella.Absyn.DotRecord p, ContextAndExpectedType arg) {
@@ -869,7 +1005,6 @@ public class VisitTypeCheck {
 
         public Type visit(Panic p, ContextAndExpectedType arg) {
             return new PanicType();
-//            return null;
         }
 
         public Type visit(Throw p, ContextAndExpectedType arg) {
@@ -894,7 +1029,6 @@ public class VisitTypeCheck {
             } catch (Exception e) {
                 p.expr_.accept(new ExprVisitor(), new ContextAndExpectedType(arg.context, ((TypeSum)arg.expectedType).type_2));
             }
-//            p.expr_.accept(new ExprVisitor(), arg);
             return null;
         }
 
