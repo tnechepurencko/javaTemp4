@@ -4,7 +4,6 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.*;
 import org.junit.jupiter.params.provider.*;
 import org.stella.typecheck.VisitTypeCheck;
-
 import static org.junit.jupiter.api.Assertions.*;
 import java.io.*;
 
@@ -13,6 +12,13 @@ class MainTest {
 
     @ParameterizedTest(name = "{index} Typechecking well-typed program {0}")
     @ValueSource(strings = {
+            "tests/universal-types/well-typed/universal-types-1.stella",
+            "tests/universal-types/well-typed/universal-types-2.stella",
+            "tests/universal-types/well-typed/universal-types-3.stella",
+            "tests/universal-types/well-typed/universal-types-4.stella",
+            "tests/universal-types/well-typed/universal-types-5.stella",
+            "tests/universal-types/well-typed/universal-types-6.stella",
+
             "tests/subtyping/well-typed/subtyping-1.stella",
             "tests/subtyping/well-typed/subtyping-2.stella",
             "tests/subtyping/well-typed/subtyping-3.stella",
@@ -82,14 +88,16 @@ class MainTest {
 
     @ParameterizedTest(name = "{index} Typechecking ill-typed program {0}")
     @ValueSource(strings = {
-//            "tests/core/ill-typed/bad-if-4.stella", // TODO DEL
-//            "tests/subtyping/well-typed/subtyping-6.stella", // TODO DEL
-//            "tests/references/well-typed/refs-4.stella", // TODO DEL
-//            "tests/references/well-typed/refs-1.stella", // TODO DEL
-//            "tests/exceptions/well-typed/panic-4.stella", // TODO DEL
-//            "tests/exceptions/well-typed/panic-1.stella", // TODO DEL
-//            "tests/exceptions/well-typed/panic-2.stella", // TODO DEL
-//            "tests/records/well-typed/records-1.stella", // TODO DEL
+//            "tests/core/well-typed/app.stella", // TODO DEL
+//            "tests/universal-types/well-typed/universal-types-4.stella", // TODO DEL
+//            "tests/universal-types/ill-typed/bad-universal-types-2.stella", // TODO DEL
+
+            "tests/universal-types/ill-typed/bad-universal-types-1.stella",
+            "tests/universal-types/ill-typed/bad-universal-types-2.stella",
+            "tests/universal-types/ill-typed/bad-universal-types-3.stella",
+            "tests/universal-types/ill-typed/bad-universal-types-4.stella",
+            "tests/universal-types/ill-typed/bad-universal-types-5.stella",
+            "tests/universal-types/ill-typed/bad-universal-types-6.stella",
 
             "tests/subtyping/ill-typed/bad-subtyping-1.stella",
             "tests/subtyping/ill-typed/bad-subtyping-2.stella",
